@@ -1,85 +1,125 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
 #include <iostream>
 
+const int SCREEN_HEIGHT = 800;
+const int SCREEN_WIDTH = 640;
 
+SDL_Event ev;
+SDL_Rect Player{SCREEN_HEIGHT/2, SCREEN_WIDTH/2+60, 60, 60};
+SDL_Rect PlayerInside{(SCREEN_HEIGHT/2)+10, (SCREEN_WIDTH/2)+10+60, 40, 40};
 
-void InitialiseSDL()
-{
-	SDL_Init(SDL_INIT_EVERYTHING);
-}
-
-
-
-void DrawAndPresent(auto l_renderer, auto l_r)
-{
-	SDL_SetRenderDrawColor(l_renderer, 0, 0, 0, 255);
-	SDL_RenderClear(l_renderer);
-
-	SDL_SetRenderDrawColor(l_renderer, 255, 255, 255, 255);
-	SDL_RenderFillRect(l_renderer, &l_r);
-
-	SDL_RenderPresent(l_renderer);
-}
+bool Setup();
+bool Input();
+void UpdateLogic();
+void DrawAndPresent(auto l_renderer, auto l_r, auto l_background);
+void CleanUp(auto l_window, auto l_renderer, auto l_background);
 
 int main(int argc, char* argv[])
 {
-	SDL_Event ev;
 	bool running = true;
+	SDL_Texture *background_texture = NULL;
 	
-	InitialiseSDL();
-
-	SDL_Rect Player{10, 10, 250, 250};
+	if(Setup())
+	{
+		return 1;
+	}
 
 	auto window = SDL_CreateWindow
 	(
 		"Boom",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		800, 640, 0
+		SCREEN_HEIGHT, SCREEN_WIDTH, SDL_WINDOW_SHOWN
 	);
 
-	auto renderer = SDL_CreateRenderer(window, -1, 0);
-
-
+	auto renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+	//set variables for first level stage 0 potential menu
+	int stage = 1;
+	background_texture = IMG_LoadTexture(renderer, "background.png");
 	while(running)
 	{
-		while(SDL_PollEvent(&ev))
-		{
-			if(ev.type == SDL_QUIT)
-			{
-				running = false;
-			}
-			if(ev.type == SDL_KEYDOWN)
-			{
-				switch(ev.key.keysym.sym)
-				{
-					case SDLK_RIGHT:
-						Player.x += 50;
-						break;
-					case SDLK_LEFT:
-						Player.x -= 50;
-						break;
-					case SDLK_UP:
-						Player.y -= 50;
-						break;
-					case SDLK_DOWN:
-						Player.y += 50;
-						break;
-				}
-			}
-			else if(ev.type == SDL_KEYUP)
-			{
-				switch(ev.key.keysym.sym)
-				{
-				//	case SDLK_RIGHT:
-				//	break;
-				}
-			}
-
-			DrawAndPresent(renderer, Player);
-			SDL_Delay(10);
-		}
+		running = Input();
+		UpdateLogic();
+		DrawAndPresent(renderer, Player, background_texture);
+		SDL_Delay((int)(1/60));
 	}
-	
+	CleanUp(window, renderer, background_texture);
     return 0;
+}
+
+
+//return true to close program on error
+bool Setup()
+{
+	if(SDL_Init(SDL_INIT_EVERYTHING) > 0)
+	{
+		std::cout << "SDL_Init error: " << SDL_GetError() << std::endl;
+		return true;
+	}
+	if(!(IMG_Init(IMG_INIT_PNG)))
+	{
+		std::cout << "IMG_Init error: " << SDL_GetError() << std::endl;
+	}
+	return false;
+}
+
+
+bool Input()
+{
+	SDL_PollEvent(&ev);
+		if(ev.type == SDL_QUIT)
+		{
+				return false;
+		}
+	return true;
+}
+
+
+void UpdateLogic()
+{
+	if(ev.key.keysym.sym == SDLK_RIGHT)
+	{
+		Player.x += 10;
+		PlayerInside.x += 10;
+	}
+	if(ev.key.keysym.sym == SDLK_LEFT)
+	{
+		Player.x -= 10;
+		PlayerInside.x -= 10;
+	}
+		
+	if(ev.key.keysym.sym == SDLK_UP)
+	{
+		Player.y -= 10;
+		PlayerInside.y -= 10;
+	}
+	if(ev.key.keysym.sym == SDLK_DOWN)
+	{
+		Player.y += 10;
+		PlayerInside.y += 10;
+	}
+}
+
+
+void DrawAndPresent(auto l_renderer, auto l_r, auto l_background)
+{
+	SDL_RenderClear(l_renderer);
+	SDL_RenderCopy(l_renderer, l_background, NULL, NULL);
+	SDL_SetRenderDrawColor(l_renderer, 200, 100, 255, 255);
+	SDL_RenderFillRect(l_renderer, &l_r);
+	SDL_SetRenderDrawColor(l_renderer, 255, 100, 0, 255);
+	SDL_RenderFillRect(l_renderer, &PlayerInside);
+	SDL_RenderPresent(l_renderer);
+}
+
+
+void CleanUp(auto l_window, auto l_renderer, auto l_background)
+{
+	SDL_DestroyTexture(l_background);
+	SDL_DestroyRenderer(l_renderer);
+	SDL_DestroyWindow(l_window);
+	IMG_Quit();
+	SDL_Quit();
 }
