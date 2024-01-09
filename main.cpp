@@ -1,58 +1,89 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mixer.h>
 #include <iostream>
 #include <vector>
 #include <string>
 
-const int SCREEN_HEIGHT = 800;
-const int SCREEN_WIDTH = 640;
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 640;
+const int BOARD_OFFSET = 80;
+const int BOARD_SIZE = 480;
 
-const float FPS = 60.0;
+const float FPS = 60.0F;
 
-class entity
+
+class Entity
 {
 	public:
-		entity(int xi, int yi, int size_xi, int size_yi, uint anglei)
+		Entity(int xi, int yi, int size_xi, int size_yi)
 		{
 			x = xi;
 			y = yi;
 			size_x = size_xi;
 			size_y = size_yi;
-			angle = anglei;
 		}
 		int x;
 		int y;
 		int size_x;
 		int size_y;
-		int vel_x;
-		int vel_y;
-		int accel_x;
-		int accel_y;
-		uint angle;
-	
 };
 
+class Player : public Entity
+{
+	public:
+		Entity::Entity; 
+		SDL_Texture * texture;
+		uint32_t movdelay;
+		bool boundcheck_x_l()
+		{
+			if( x > BOARD_OFFSET)
+				return true;
+			return false;
+		}
+		bool boundcheck_x_r()
+		{
+			if( x < BOARD_SIZE)
+				return true;
+			return false;
+		}
+		bool boundcheck_y_u()
+		{
+			if( y > BOARD_OFFSET)
+				return true;
+			return false;
+		}
+		bool boundcheck_y_d()
+		{
+			if( y < BOARD_SIZE)
+				return true;
+			return false;
+		}
+};
 
 bool Setup();
-bool Input(auto l_ptr_ev);
-void UpdateLogic(auto l_ptr_ev, auto l_ptr_p, auto l_ptr_stage);
+bool Input(auto l_ptr_ev, auto l_state);
+void UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state);
 void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg);
 void CleanUp(auto l_window, auto l_renderer, auto l_bg);
 
 int main(int argc, char* argv[])
 {
-	std::vector<entity*> entity_vec;
+	std::vector<Entity*> entity_vec;
 	bool running = true;
 	SDL_Event ev;
 	SDL_Event* ptr_ev = &ev;
 	SDL_Texture *bg_texture = NULL;
-	entity player(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, 20, 20, 0);
-	entity* ptr_player = &player;
+	Player player(80, 80, 20, 20);
+	Player* ptr_player = &player;
 	uint32_t FrameTime = 0;
 	std::vector<char*> bg_vec = {"menu.png", "background.png"};
 	int stage = 1;
 	int* ptr_stage = &stage;
+
+	
+	const Uint8* state = SDL_GetKeyboardState(nullptr);
 
 	if(Setup())
 	{
@@ -64,25 +95,26 @@ int main(int argc, char* argv[])
 		"Boom",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		SCREEN_HEIGHT, SCREEN_WIDTH, SDL_WINDOW_SHOWN
+		SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN
 	);
 
 	auto renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 	bg_texture = IMG_LoadTexture(renderer, bg_vec[stage]);
 	
+
 	while(running)
 	{
 		//snapshot frame start
 		FrameTime = SDL_GetTicks();
 		//
-		running = Input(ptr_ev);
-		UpdateLogic(ptr_ev, ptr_player, ptr_stage);
+		running = Input(ptr_ev, state);
+		UpdateLogic(ptr_player, ptr_stage, state);
 		DrawAndPresent(renderer, ptr_player, bg_texture);
 		//delay next frame if it finished faster than desired
 		FrameTime = SDL_GetTicks() - FrameTime;
-		if(1000.0/FPS > (float)FrameTime)
+		if(1000.0F/FPS > (float)FrameTime)
 		{
-			SDL_Delay((float)1000.0/FPS - (float)FrameTime);
+			SDL_Delay(1000.0F/FPS - (float)FrameTime);
 		}
 		//
 	}
@@ -107,35 +139,40 @@ bool Setup()
 }
 
 
-bool Input(auto l_ptr_ev)
+bool Input(auto l_ptr_ev, auto l_state)
 {
 	SDL_PollEvent(l_ptr_ev);
 		if(l_ptr_ev->type == SDL_QUIT)
 		{
 				return false;
 		}
+	l_state = SDL_GetKeyboardState(nullptr);
 	return true;
 }
 
 
-void UpdateLogic(auto l_ptr_ev, auto l_ptr_p, auto l_ptr_stage)
+void UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state)
 {
-	if(l_ptr_ev->key.keysym.sym == SDLK_RIGHT)
+	if(l_state[SDL_SCANCODE_RIGHT])
 	{
-		l_ptr_p->x += 10;
+		if(l_ptr_p->boundcheck_x_r())
+			l_ptr_p->x += 100;
 	}
-	if(l_ptr_ev->key.keysym.sym == SDLK_LEFT)
+	if(l_state[SDL_SCANCODE_LEFT])
 	{
-		l_ptr_p->x -= 10;
+		if(l_ptr_p->boundcheck_x_l())
+			l_ptr_p->x -= 100;
 	}
-		
-	if(l_ptr_ev->key.keysym.sym == SDLK_UP)
+	if(l_state[SDL_SCANCODE_UP])	
+
 	{
-		l_ptr_p->y -= 10;
+		if(l_ptr_p->boundcheck_y_u())
+			l_ptr_p->y -= 100;
 	}
-	if(l_ptr_ev->key.keysym.sym == SDLK_DOWN)
+	if(l_state[SDL_SCANCODE_DOWN])
 	{
-		l_ptr_p->y += 10;
+		if(l_ptr_p->boundcheck_y_d())
+			l_ptr_p->y += 100;
 	}
 }
 
