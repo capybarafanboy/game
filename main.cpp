@@ -17,46 +17,49 @@ const float FPS = 60.0F;
 class Entity
 {
 	public:
-		Entity(int xi, int yi, int size_xi, int size_yi)
+		SDL_Rect rect{};
+		Entity(int x, int y, int w, int h)
 		{
-			x = xi;
-			y = yi;
-			size_x = size_xi;
-			size_y = size_yi;
+			rect.x = x;
+			rect.y = y;
+			rect.w = w;
+			rect.h = h;
 		}
-		int x;
-		int y;
-		int size_x;
-		int size_y;
 };
 
 class Player : public Entity
 {
 	public:
 		Entity::Entity; 
-		SDL_Texture * texture;
-		uint32_t movdelay;
+		SDL_Surface * texture = NULL;
+		uint32_t movdelay = 0;
 		bool boundcheck_x_l()
 		{
-			if( x > BOARD_OFFSET)
+			if( rect.x > BOARD_OFFSET)
 				return true;
 			return false;
 		}
 		bool boundcheck_x_r()
 		{
-			if( x < BOARD_SIZE)
+			if( rect.x < BOARD_SIZE)
 				return true;
 			return false;
 		}
 		bool boundcheck_y_u()
 		{
-			if( y > BOARD_OFFSET)
+			if( rect.y > BOARD_OFFSET)
 				return true;
 			return false;
 		}
 		bool boundcheck_y_d()
 		{
-			if( y < BOARD_SIZE)
+			if( rect.y < BOARD_SIZE)
+				return true;
+			return false;
+		}
+		bool delaycheck()
+		{
+			if( SDL_GetTicks() > movdelay + 128)
 				return true;
 			return false;
 		}
@@ -65,8 +68,8 @@ class Player : public Entity
 bool Setup();
 bool Input(auto l_ptr_ev, auto l_state);
 void UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state);
-void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg);
-void CleanUp(auto l_window, auto l_renderer, auto l_bg);
+void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_window_surface);
+void CleanUp(auto l_window, auto l_renderer, auto l_bg, auto l_window_surface);
 
 int main(int argc, char* argv[])
 {
@@ -99,6 +102,10 @@ int main(int argc, char* argv[])
 	);
 
 	auto renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+	SDL_Surface *window_surface = SDL_GetWindowSurface(window);
+
+	//player.texture = SDL_LoadBMP("player.bmp");
+
 	bg_texture = IMG_LoadTexture(renderer, bg_vec[stage]);
 	
 
@@ -109,7 +116,7 @@ int main(int argc, char* argv[])
 		//
 		running = Input(ptr_ev, state);
 		UpdateLogic(ptr_player, ptr_stage, state);
-		DrawAndPresent(renderer, ptr_player, bg_texture);
+		DrawAndPresent(renderer, ptr_player, bg_texture, window, window_surface);
 		//delay next frame if it finished faster than desired
 		FrameTime = SDL_GetTicks() - FrameTime;
 		if(1000.0F/FPS > (float)FrameTime)
@@ -118,7 +125,7 @@ int main(int argc, char* argv[])
 		}
 		//
 	}
-	CleanUp(window, renderer, bg_texture);
+	CleanUp(window, renderer, bg_texture, window_surface);
     return 0;
 }
 
@@ -155,46 +162,59 @@ void UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state)
 {
 	if(l_state[SDL_SCANCODE_RIGHT])
 	{
-		if(l_ptr_p->boundcheck_x_r())
-			l_ptr_p->x += 100;
+		if(l_ptr_p->boundcheck_x_r() && l_ptr_p->delaycheck() )
+		{
+			l_ptr_p->rect.x += 100;
+			l_ptr_p->movdelay = SDL_GetTicks();
+		}
 	}
 	if(l_state[SDL_SCANCODE_LEFT])
 	{
-		if(l_ptr_p->boundcheck_x_l())
-			l_ptr_p->x -= 100;
+		if(l_ptr_p->boundcheck_x_l() && l_ptr_p->delaycheck() )
+		{
+			l_ptr_p->rect.x -= 100;
+			l_ptr_p->movdelay = SDL_GetTicks();
+		}
 	}
 	if(l_state[SDL_SCANCODE_UP])	
 
 	{
-		if(l_ptr_p->boundcheck_y_u())
-			l_ptr_p->y -= 100;
+		if(l_ptr_p->boundcheck_y_u() && l_ptr_p->delaycheck() )
+		{
+			l_ptr_p->rect.y -= 100;
+			l_ptr_p->movdelay = SDL_GetTicks();
+		}
 	}
 	if(l_state[SDL_SCANCODE_DOWN])
 	{
-		if(l_ptr_p->boundcheck_y_d())
-			l_ptr_p->y += 100;
+		if(l_ptr_p->boundcheck_y_d() && l_ptr_p->delaycheck() )
+		{
+			l_ptr_p->rect.y += 100;
+			l_ptr_p->movdelay = SDL_GetTicks();
+		}
 	}
 }
 
 
-void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg)
+void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_window_surface)
 {
 	SDL_RenderClear(l_renderer);
 	//Draw Background
 	SDL_RenderCopy(l_renderer, l_bg, NULL, NULL);
 	//Draw Player
-	SDL_Rect rect{l_ptr_p->x, l_ptr_p->y, l_ptr_p->size_x, l_ptr_p->size_y};
 	SDL_SetRenderDrawColor(l_renderer, 200, 100, 255, 255);
-	SDL_RenderFillRect(l_renderer, &rect);
+	SDL_RenderFillRect(l_renderer, &l_ptr_p->rect);
 	
-
+	//SDL_BlitSurface(l_ptr_p->texture, NULL, l_window_surface, NULL);
+	//SDL_UpdateWindowSurface(l_window);
 	SDL_RenderPresent(l_renderer);
 }
 
 
-void CleanUp(auto l_window, auto l_renderer, auto l_bg)
+void CleanUp(auto l_window, auto l_renderer, auto l_bg, auto l_window_surface)
 {
 	SDL_DestroyTexture(l_bg);
+	SDL_FreeSurface(l_window_surface);
 	SDL_DestroyRenderer(l_renderer);
 	SDL_DestroyWindow(l_window);
 	IMG_Quit();
