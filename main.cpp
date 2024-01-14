@@ -1,7 +1,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
-#include <SDL2/SDL_mixer.h>
+//#include <SDL2/SDL_mixer.h>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -25,14 +25,20 @@ class Entity
 			rect.w = w;
 			rect.h = h;
 		}
+		Entity() = default;
 };
 
 class Player : public Entity
 {
 	public:
 		Entity::Entity; 
-		SDL_Surface * texture = NULL;
+		SDL_Texture * texture = NULL;
+		SDL_Texture* liv_texture = NULL;
+		SDL_Rect liv_rect{SCREEN_HEIGHT, 60, 30, 30};
+		SDL_Texture* liv_text = NULL;
+		SDL_Rect liv_text_rect{};
 		uint32_t movdelay = 0;
+		int lives = 3;
 		bool boundcheck_x_l()
 		{
 			if( rect.x > BOARD_OFFSET)
@@ -65,20 +71,46 @@ class Player : public Entity
 		}
 };
 
+class Enemy : public Entity
+{
+	public:
+		Enemy(int x, int y, int w, int h, int l){
+			rect.x = x;
+			rect.y = y;
+			rect.w = w;
+			rect.h = h;
+			lifetime = l;
+		}
+		unsigned int lifetime;
+
+};
+
+
 bool Setup();
-bool Input(auto l_ptr_ev, auto l_state);
-void UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state);
-void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_window_surface);
-void CleanUp(auto l_window, auto l_renderer, auto l_bg, auto l_window_surface);
+void Input(auto l_ptr_ev, auto l_state);
+bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto del_vec, auto l_ptr_ev);
+void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_font);
+void CleanUp(auto l_window, auto l_renderer, auto l_bg);
 
 int main(int argc, char* argv[])
 {
-	std::vector<Entity*> entity_vec;
+	std::vector<Enemy*> enemy_vec;
+	std::vector<Enemy*> enemy_vec_del;
+	int field[5][5];
+	TTF_Font* font = NULL;
+	// font source: https://fontmeme.com/fonts/freemono-font/
+	/*
+	TTF_Font* font = TTF_OpenFont("FreeMono.ttf", 16);
+	if (font == NULL) {
+        fprintf(stderr, "error: font not found\n");
+        exit(EXIT_FAILURE);
+    }
+	*/
 	bool running = true;
 	SDL_Event ev;
 	SDL_Event* ptr_ev = &ev;
 	SDL_Texture *bg_texture = NULL;
-	Player player(80, 80, 20, 20);
+	Player player(80, 80, 80, 80);
 	Player* ptr_player = &player;
 	uint32_t FrameTime = 0;
 	std::vector<char*> bg_vec = {"menu.png", "background.png"};
@@ -102,10 +134,10 @@ int main(int argc, char* argv[])
 	);
 
 	auto renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-	SDL_Surface *window_surface = SDL_GetWindowSurface(window);
+	//SDL_Surface *window_surface = SDL_GetWindowSurface(window);
 
-	//player.texture = SDL_LoadBMP("player.bmp");
-
+	player.texture = IMG_LoadTexture(renderer, "player.png");
+	player.liv_texture = IMG_LoadTexture(renderer, "health.png");
 	bg_texture = IMG_LoadTexture(renderer, bg_vec[stage]);
 	
 
@@ -114,9 +146,12 @@ int main(int argc, char* argv[])
 		//snapshot frame start
 		FrameTime = SDL_GetTicks();
 		//
-		running = Input(ptr_ev, state);
-		UpdateLogic(ptr_player, ptr_stage, state);
-		DrawAndPresent(renderer, ptr_player, bg_texture, window, window_surface);
+		Input(ptr_ev, state);
+		running = UpdateLogic(ptr_player, ptr_stage, state, enemy_vec_del, ptr_ev);
+		
+
+		
+		DrawAndPresent(renderer, ptr_player, bg_texture, window, font);
 		//delay next frame if it finished faster than desired
 		FrameTime = SDL_GetTicks() - FrameTime;
 		if(1000.0F/FPS > (float)FrameTime)
@@ -125,7 +160,7 @@ int main(int argc, char* argv[])
 		}
 		//
 	}
-	CleanUp(window, renderer, bg_texture, window_surface);
+	CleanUp(window, renderer, bg_texture);
     return 0;
 }
 
@@ -142,23 +177,22 @@ bool Setup()
 	{
 		std::cout << "IMG_Init error: " << SDL_GetError() << std::endl;
 	}
+	if(TTF_Init() < 0)
+	{
+		std::cout << "TTF_Init error: " << TTF_GetError() << std::endl;
+	}
 	return false;
 }
 
 
-bool Input(auto l_ptr_ev, auto l_state)
+void Input(auto l_ptr_ev, auto l_state)
 {
 	SDL_PollEvent(l_ptr_ev);
-		if(l_ptr_ev->type == SDL_QUIT)
-		{
-				return false;
-		}
 	l_state = SDL_GetKeyboardState(nullptr);
-	return true;
 }
 
 
-void UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state)
+bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto del_vec, auto l_ptr_ev)
 {
 	if(l_state[SDL_SCANCODE_RIGHT])
 	{
@@ -193,28 +227,58 @@ void UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state)
 			l_ptr_p->movdelay = SDL_GetTicks();
 		}
 	}
+	for( long long unsigned int i = 0; i < del_vec.size(); i++)
+	{
+		if(del_vec[i]->lifetime <= 0)
+		{
+			del_vec.erase(del_vec.begin() + i);
+			i--;
+		}
+	}
+
+	//closing the program
+	if(l_ptr_ev->type == SDL_QUIT)
+	{
+		return false;
+	}
+	if(l_ptr_p->lives <= 0)
+	{
+		return false;
+	}
+	return true;
 }
 
 
-void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_window_surface)
+void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_font)
 {
 	SDL_RenderClear(l_renderer);
 	//Draw Background
 	SDL_RenderCopy(l_renderer, l_bg, NULL, NULL);
 	//Draw Player
-	SDL_SetRenderDrawColor(l_renderer, 200, 100, 255, 255);
-	SDL_RenderFillRect(l_renderer, &l_ptr_p->rect);
+	//SDL_SetRenderDrawColor(l_renderer, 200, 100, 255, 255);
+	//SDL_RenderFillRect(l_renderer, &l_ptr_p->rect);
+	SDL_RenderCopyEx(l_renderer, l_ptr_p->texture, NULL, &l_ptr_p->rect, 0, NULL, SDL_FLIP_NONE);
 	
+
+	//SDL_RenderCopyEx(l_renderer, text_texture, NULL, &text_rec, 0, NULL, SDL_FLIP_NONE  );
+	//render lives
+	for(int i = 0; i < l_ptr_p->lives; i++)
+	{
+		l_ptr_p->liv_rect.x += 30;
+		SDL_RenderCopyEx(l_renderer, l_ptr_p->liv_texture, NULL, &l_ptr_p->liv_rect, 0, NULL, SDL_FLIP_NONE );
+	}
+	l_ptr_p->liv_rect.x -= 30 * l_ptr_p->lives;
+
+
 	//SDL_BlitSurface(l_ptr_p->texture, NULL, l_window_surface, NULL);
 	//SDL_UpdateWindowSurface(l_window);
 	SDL_RenderPresent(l_renderer);
 }
 
 
-void CleanUp(auto l_window, auto l_renderer, auto l_bg, auto l_window_surface)
+void CleanUp(auto l_window, auto l_renderer, auto l_bg)
 {
 	SDL_DestroyTexture(l_bg);
-	SDL_FreeSurface(l_window_surface);
 	SDL_DestroyRenderer(l_renderer);
 	SDL_DestroyWindow(l_window);
 	IMG_Quit();
