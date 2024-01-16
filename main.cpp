@@ -1,10 +1,14 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
+//#include <SDL2/SDL_ttf.h>
 //#include <SDL2/SDL_mixer.h>
 #include <iostream>
 #include <vector>
 #include <string>
+#include <cstdlib>
+#include <ctime>
+
+
 
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 640;
@@ -82,22 +86,23 @@ class Enemy : public Entity
 			lifetime = l;
 		}
 		unsigned int lifetime;
-
+		int damage;
 };
 
 
 bool Setup();
 void Input(auto l_ptr_ev, auto l_state);
-bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto del_vec, auto l_ptr_ev);
-void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_font);
+bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto en_vec, auto l_ptr_ev, auto l_field, auto l_timer);
+void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_timer);
 void CleanUp(auto l_window, auto l_renderer, auto l_bg);
 
 int main(int argc, char* argv[])
 {
+	unsigned int timer = 0;
+	std::srand(std::time(nullptr));
 	std::vector<Enemy*> enemy_vec;
-	std::vector<Enemy*> enemy_vec_del;
 	int field[5][5];
-	TTF_Font* font = NULL;
+	//TTF_Font* font = NULL;
 	// font source: https://fontmeme.com/fonts/freemono-font/
 	/*
 	TTF_Font* font = TTF_OpenFont("FreeMono.ttf", 16);
@@ -147,11 +152,9 @@ int main(int argc, char* argv[])
 		FrameTime = SDL_GetTicks();
 		//
 		Input(ptr_ev, state);
-		running = UpdateLogic(ptr_player, ptr_stage, state, enemy_vec_del, ptr_ev);
+		running = UpdateLogic(ptr_player, ptr_stage, state, enemy_vec, ptr_ev, field, timer);
 		
-
-		
-		DrawAndPresent(renderer, ptr_player, bg_texture, window, font);
+		DrawAndPresent(renderer, ptr_player, bg_texture, window, timer);
 		//delay next frame if it finished faster than desired
 		FrameTime = SDL_GetTicks() - FrameTime;
 		if(1000.0F/FPS > (float)FrameTime)
@@ -177,10 +180,10 @@ bool Setup()
 	{
 		std::cout << "IMG_Init error: " << SDL_GetError() << std::endl;
 	}
-	if(TTF_Init() < 0)
+	/*if(TTF_Init() < 0)
 	{
 		std::cout << "TTF_Init error: " << TTF_GetError() << std::endl;
-	}
+	}*/
 	return false;
 }
 
@@ -192,8 +195,9 @@ void Input(auto l_ptr_ev, auto l_state)
 }
 
 
-bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto del_vec, auto l_ptr_ev)
+bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto en_vec, auto l_ptr_ev, auto l_field, auto l_timer)
 {
+	l_timer = l_timer + 1;
 	if(l_state[SDL_SCANCODE_RIGHT])
 	{
 		if(l_ptr_p->boundcheck_x_r() && l_ptr_p->delaycheck() )
@@ -249,7 +253,7 @@ bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto del_vec, aut
 }
 
 
-void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_font)
+void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_timer)
 {
 	SDL_RenderClear(l_renderer);
 	//Draw Background
