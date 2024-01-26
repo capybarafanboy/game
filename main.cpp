@@ -39,10 +39,14 @@ class Player : public Entity
 		SDL_Texture * texture = NULL;
 		SDL_Texture* liv_texture = NULL;
 		SDL_Rect liv_rect{SCREEN_HEIGHT, 60, 30, 30};
+		SDL_Rect logic_pos{0, 0, 0, 0};
 		SDL_Texture* liv_text = NULL;
+		SDL_Texture* dead_texture = NULL;
 		SDL_Rect liv_text_rect{};
 		uint32_t movdelay = 0;
+		uint32_t dmgd = 0;
 		int lives = 3;
+		bool game_over = false;
 		bool boundcheck_x_l()
 		{
 			if( rect.x > BOARD_OFFSET)
@@ -73,6 +77,12 @@ class Player : public Entity
 				return true;
 			return false;
 		}
+		bool dmgcheck()
+		{
+			if( SDL_GetTicks() > dmgd + 1024)
+				return true;
+			return false;
+		}
 };
 
 class Enemy : public Entity
@@ -93,7 +103,7 @@ class Enemy : public Entity
 bool Setup();
 void Input(auto l_ptr_ev, auto l_state);
 bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto en_vec, auto l_ptr_ev, auto l_field, auto l_timer);
-void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_timer);
+void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_timer, auto l_gmot);
 void CleanUp(auto l_window, auto l_renderer, auto l_bg);
 
 int main(int argc, char* argv[])
@@ -115,12 +125,15 @@ int main(int argc, char* argv[])
 	SDL_Event ev;
 	SDL_Event* ptr_ev = &ev;
 	SDL_Texture *bg_texture = NULL;
+	SDL_Texture *gmo_texture = NULL;
+	
 	Player player(80, 80, 80, 80);
 	Player* ptr_player = &player;
 	uint32_t FrameTime = 0;
 	std::vector<char*> bg_vec = {"menu.png", "background.png"};
 	int stage = 1;
 	int* ptr_stage = &stage;
+
 
 	
 	const Uint8* state = SDL_GetKeyboardState(nullptr);
@@ -142,8 +155,10 @@ int main(int argc, char* argv[])
 	//SDL_Surface *window_surface = SDL_GetWindowSurface(window);
 
 	player.texture = IMG_LoadTexture(renderer, "player.png");
+	player.dead_texture = IMG_LoadTexture(renderer, "ded.png");
 	player.liv_texture = IMG_LoadTexture(renderer, "health.png");
 	bg_texture = IMG_LoadTexture(renderer, bg_vec[stage]);
+	gmo_texture = IMG_LoadTexture(renderer, "go_text.png");
 	
 
 	while(running)
@@ -154,7 +169,7 @@ int main(int argc, char* argv[])
 		Input(ptr_ev, state);
 		running = UpdateLogic(ptr_player, ptr_stage, state, enemy_vec, ptr_ev, field, timer);
 		
-		DrawAndPresent(renderer, ptr_player, bg_texture, window, timer);
+		DrawAndPresent(renderer, ptr_player, bg_texture, window, timer, gmo_texture);
 		//delay next frame if it finished faster than desired
 		FrameTime = SDL_GetTicks() - FrameTime;
 		if(1000.0F/FPS > (float)FrameTime)
@@ -198,11 +213,13 @@ void Input(auto l_ptr_ev, auto l_state)
 bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto en_vec, auto l_ptr_ev, auto l_field, auto l_timer)
 {
 	l_timer = l_timer + 1;
+	//moving player
 	if(l_state[SDL_SCANCODE_RIGHT])
 	{
 		if(l_ptr_p->boundcheck_x_r() && l_ptr_p->delaycheck() )
 		{
 			l_ptr_p->rect.x += 100;
+			l_ptr_p->logic_pos.x += 1;
 			l_ptr_p->movdelay = SDL_GetTicks();
 		}
 	}
@@ -211,15 +228,16 @@ bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto en_vec, auto
 		if(l_ptr_p->boundcheck_x_l() && l_ptr_p->delaycheck() )
 		{
 			l_ptr_p->rect.x -= 100;
+			l_ptr_p->logic_pos.x -= 1;
 			l_ptr_p->movdelay = SDL_GetTicks();
 		}
 	}
-	if(l_state[SDL_SCANCODE_UP])	
-
+	if(l_state[SDL_SCANCODE_UP])
 	{
 		if(l_ptr_p->boundcheck_y_u() && l_ptr_p->delaycheck() )
 		{
 			l_ptr_p->rect.y -= 100;
+			l_ptr_p->logic_pos.y -= 1;
 			l_ptr_p->movdelay = SDL_GetTicks();
 		}
 	}
@@ -228,14 +246,21 @@ bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto en_vec, auto
 		if(l_ptr_p->boundcheck_y_d() && l_ptr_p->delaycheck() )
 		{
 			l_ptr_p->rect.y += 100;
+			l_ptr_p->logic_pos.y += 1;
 			l_ptr_p->movdelay = SDL_GetTicks();
 		}
 	}
-	for( long long unsigned int i = 0; i < del_vec.size(); i++)
+
+	if( l_ptr_p->logic_pos.x == 2 && l_ptr_p->logic_pos.y == 2 && l_ptr_p->dmgcheck())
 	{
-		if(del_vec[i]->lifetime <= 0)
+		l_ptr_p->lives -= 1;
+		l_ptr_p->dmgd = SDL_GetTicks();
+	}
+	for( long long unsigned int i = 0; i < en_vec.size(); i++)
+	{
+		if(en_vec[i]->lifetime <= 0)
 		{
-			del_vec.erase(del_vec.begin() + i);
+			en_vec.erase(en_vec.begin() + i);
 			i--;
 		}
 	}
@@ -247,13 +272,14 @@ bool UpdateLogic(auto l_ptr_p, auto l_ptr_stage, auto l_state, auto en_vec, auto
 	}
 	if(l_ptr_p->lives <= 0)
 	{
-		return false;
+		if(l_ptr_ev->type == SDL_KEYDOWN)
+			return false;
 	}
 	return true;
 }
 
 
-void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_timer)
+void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, auto l_timer, auto l_gmot)
 {
 	SDL_RenderClear(l_renderer);
 	//Draw Background
@@ -261,8 +287,14 @@ void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, aut
 	//Draw Player
 	//SDL_SetRenderDrawColor(l_renderer, 200, 100, 255, 255);
 	//SDL_RenderFillRect(l_renderer, &l_ptr_p->rect);
-	SDL_RenderCopyEx(l_renderer, l_ptr_p->texture, NULL, &l_ptr_p->rect, 0, NULL, SDL_FLIP_NONE);
-	
+	if(l_ptr_p->lives > 0)
+	{
+		SDL_RenderCopyEx(l_renderer, l_ptr_p->texture, NULL, &l_ptr_p->rect, 0, NULL, SDL_FLIP_NONE);
+	}
+	else
+	{
+		SDL_RenderCopyEx(l_renderer, l_ptr_p->dead_texture, NULL, &l_ptr_p->rect, 0, NULL, SDL_FLIP_NONE);
+	}
 
 	//SDL_RenderCopyEx(l_renderer, text_texture, NULL, &text_rec, 0, NULL, SDL_FLIP_NONE  );
 	//render lives
@@ -273,7 +305,11 @@ void DrawAndPresent(auto l_renderer, auto l_ptr_p, auto l_bg, auto l_window, aut
 	}
 	l_ptr_p->liv_rect.x -= 30 * l_ptr_p->lives;
 
-
+	if(l_ptr_p->lives <= 0 )
+	{
+		SDL_Rect gmor{40, 40, 300, 40};	
+		SDL_RenderCopyEx(l_renderer, l_gmot, NULL , &gmor, 0, NULL, SDL_FLIP_NONE );
+	}
 	//SDL_BlitSurface(l_ptr_p->texture, NULL, l_window_surface, NULL);
 	//SDL_UpdateWindowSurface(l_window);
 	SDL_RenderPresent(l_renderer);
